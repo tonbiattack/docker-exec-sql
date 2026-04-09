@@ -155,6 +155,9 @@ func run(cmd *cobra.Command, args []string) error {
 }
 
 func loadConfig(path string) (*config, error) {
+	// Windowsから実行する場合: "./sql" や "C:/Users/.../sql" などのパスが使えます。
+	// WSL2から実行する場合: WindowsのドライブはWSL2内で /mnt/c/ 以下にマウントされるため、
+	//   sql_dir に "/mnt/c/Users/.../sql" のように指定するだけで動作します。
 	b, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("設定ファイルの読み込みに失敗しました: %w", err)

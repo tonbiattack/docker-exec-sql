@@ -111,6 +111,56 @@ chmod +x exec-sql.sh
 
 ---
 
+## WSL2から実行する
+
+コードの変更は不要です。WSL2のターミナルからそのまま実行できます。
+
+### 前提条件
+
+Docker Desktop の設定でWSL2統合を有効にしてください。
+
+```
+Docker Desktop → Settings → Resources → WSL Integration → Ubuntu: ON
+```
+
+有効になっていれば WSL2 から `docker` コマンドが使えます。
+
+### Windowsのファイルをそのまま指定する
+
+WSL2からはWindowsのドライブが `/mnt/c/` 以下にマウントされています。  
+`sql_dir` にWindowsのフォルダパスを `/mnt/c/` 形式で指定するだけです。
+
+```yaml
+# config.yml（WSL2用）
+container: test-mysql
+database: testdb
+user: root
+password: secret
+sql_dir: /mnt/c/Users/teni2/Documents/sql  # WindowsのフォルダをWSL2パスで指定
+```
+
+```bash
+# WSL2のターミナルで実行
+go run . -f config.yml
+
+# フラグでも同様に指定可能
+go run . -c test-mysql -d testdb -u root -p secret -s /mnt/c/Users/teni2/Documents/sql
+```
+
+### Windowsでビルドしたバイナリをそのまま使う
+
+Goがインストールされていない場合は、Windowsでビルドしたバイナリを `/mnt/c/` 経由で実行できます。
+
+```bash
+# Windowsでビルド（PowerShellまたはコマンドプロンプト）
+go build -o docker-exec-sql.exe .
+
+# WSL2から実行
+/mnt/c/apps/docker-exec-sql/docker-exec-sql.exe -f /mnt/c/apps/docker-exec-sql/config.yml
+```
+
+---
+
 ## 検証用MySQL環境（docker-compose）
 
 `docker-compose.yml` で検証用のMySQLコンテナを手軽に起動できます。

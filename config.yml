@@ -1,5 +1,15 @@
-container: test-mysql
-database: testdb
-user: root
-password: secret
-sql_dir: ./sql
+# docker-exec-sql 設定ファイル
+#
+# Windowsから実行する場合:
+#   sql_dir: ./sql
+#   sql_dir: C:/Users/teni2/Documents/sql   # 絶対パスも可
+#
+# WSL2から実行する場合:
+#   WindowsのドライブはWSL2内で /mnt/c/ 以下にマウントされています。
+#   sql_dir: /mnt/c/Users/teni2/Documents/sql
+
+container: test-mysql   # DockerコンテナIDまたはコンテナ名
+database: testdb        # データベース名
+user: root              # データベースユーザー名
+password: secret        # データベースパスワード（不要な場合は削除）
+sql_dir: ./sql          # SQLファイルが格納されたフォルダパス
