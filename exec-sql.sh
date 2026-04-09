@@ -80,6 +80,8 @@ echo "=========================================="
 
 SUCCESS=0
 FAIL=0
+# ※ ((var++)) は0→1のインクリメント時に終了コード1を返すため += を使用
+
 
 for SQL_FILE in "${SQL_FILES[@]}"; do
   FILENAME=$(basename "$SQL_FILE")
@@ -89,21 +91,25 @@ for SQL_FILE in "${SQL_FILES[@]}"; do
   # ローカルのSQLファイルをコンテナの /tmp へコピー
   docker cp "$SQL_FILE" "$CONTAINER:/tmp/$FILENAME"
 
-  # コンテナ内でmysqlコマンドを実行
+  # コンテナ内でmysqlコマンドを実行 (set -e 対策で if で直接受け取る)
   if [[ -n "$DB_PASS" ]]; then
-    docker exec "$CONTAINER" bash -c \
-      "mysql -u${DB_USER} -p${DB_PASS} ${DB_NAME} < /tmp/${FILENAME}; rm /tmp/${FILENAME}"
+    if docker exec "$CONTAINER" bash -c \
+        "mysql -u${DB_USER} -p${DB_PASS} ${DB_NAME} < /tmp/${FILENAME}; rm /tmp/${FILENAME}"; then
+      echo "[OK] $FILENAME"
+      SUCCESS=$((SUCCESS + 1))
+    else
+      echo "[FAIL] $FILENAME"
+      FAIL=$((FAIL + 1))
+    fi
   else
-    docker exec "$CONTAINER" bash -c \
-      "mysql -u${DB_USER} ${DB_NAME} < /tmp/${FILENAME}; rm /tmp/${FILENAME}"
-  fi
-
-  if [[ $? -eq 0 ]]; then
-    echo "[OK] $FILENAME"
-    ((SUCCESS++))
-  else
-    echo "[FAIL] $FILENAME"
-    ((FAIL++))
+    if docker exec "$CONTAINER" bash -c \
+        "mysql -u${DB_USER} ${DB_NAME} < /tmp/${FILENAME}; rm /tmp/${FILENAME}"; then
+      echo "[OK] $FILENAME"
+      SUCCESS=$((SUCCESS + 1))
+    else
+      echo "[FAIL] $FILENAME"
+      FAIL=$((FAIL + 1))
+    fi
   fi
 done
 
