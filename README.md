@@ -24,34 +24,47 @@ go mod tidy
 ### 使い方
 
 ```bash
-# go run で実行
+# 設定ファイルで実行（推奨）
+go run . -f config.yml
+
+# フラグで実行
 go run . -c <コンテナ名> -d <DB名> -u <ユーザー> -s <SQLフォルダ> [-p <パスワード>]
+
+# 設定ファイル＋フラグで一部上書き
+go run . -f config.yml -s ./other-sql
 
 # バイナリをビルドして実行
 go build -o docker-exec-sql .
-./docker-exec-sql -c <コンテナ名> -d <DB名> -u <ユーザー> -s <SQLフォルダ>
+./docker-exec-sql -f config.yml
 ```
+
+### 設定ファイル（YAML）
+
+`config.yml` に接続情報をまとめて記述できます。
+
+```yaml
+container: my_mysql_container
+database: mydb
+user: root
+password: secret
+sql_dir: ./sql
+```
+
+フラグと設定ファイルを併用した場合、**フラグが優先**されます。
 
 ### フラグ
 
-| フラグ | 長形式 | 説明 | 必須 |
-|-------|--------|------|------|
-| `-c` | `--container` | DockerコンテナIDまたはコンテナ名 | ✅ |
-| `-d` | `--database` | データベース名 | ✅ |
-| `-u` | `--user` | データベースユーザー名 | ✅ |
-| `-s` | `--sql-dir` | SQLファイルが格納されたローカルフォルダパス | ✅ |
-| `-p` | `--password` | データベースパスワード | - |
-| `-h` | `--help` | ヘルプ表示 | - |
+| フラグ | 長形式 | 説明 |
+|-------|--------|------|
+| `-f` | `--file` | 設定ファイルパス (YAML) |
+| `-c` | `--container` | DockerコンテナIDまたはコンテナ名 |
+| `-d` | `--database` | データベース名 |
+| `-u` | `--user` | データベースユーザー名 |
+| `-s` | `--sql-dir` | SQLファイルが格納されたローカルフォルダパス |
+| `-p` | `--password` | データベースパスワード |
+| `-h` | `--help` | ヘルプ表示 |
 
-### 実行例
-
-```bash
-# パスワードあり
-go run . -c my_mysql_container -d mydb -u root -p secret -s ./sql
-
-# パスワードなし
-go run . -c my_mysql_container -d mydb -u root -s ./sql
-```
+`-c` `-d` `-u` `-s` は設定ファイルまたはフラグのいずれかで指定が必要です。
 
 ---
 

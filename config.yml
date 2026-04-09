@@ -1,0 +1,5 @@
+container: test-mysql
+database: testdb
+user: root
+password: secret
+sql_dir: ./sql

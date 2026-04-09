@@ -9,21 +9,37 @@ import (
 	"strings"
 
 	"github.com/spf13/cobra"
+	"gopkg.in/yaml.v3"
 )
 
+type config struct {
+	Container string `yaml:"container"`
+	Database  string `yaml:"database"`
+	User      string `yaml:"user"`
+	Password  string `yaml:"password"`
+	SQLDir    string `yaml:"sql_dir"`
+}
+
 var (
-	container string
-	dbName    string
-	dbUser    string
-	dbPass    string
-	sqlDir    string
+	container  string
+	dbName     string
+	dbUser     string
+	dbPass     string
+	sqlDir     string
+	configFile string
 )
 
 var rootCmd = &cobra.Command{
 	Use:   "docker-exec-sql",
 	Short: "ローカルのSQLファイルを起動中のDockerコンテナ(MySQL)へ一括実行する",
-	Example: `  docker-exec-sql -c my_mysql -d mydb -u root -p secret -s ./sql
-  docker-exec-sql -c my_mysql -d mydb -u root -s ./sql`,
+	Example: `  # 設定ファイルで実行
+  docker-exec-sql -f config.yml
+
+  # フラグで実行
+  docker-exec-sql -c my_mysql -d mydb -u root -p secret -s ./sql
+
+  # 設定ファイル＋フラグの上書き
+  docker-exec-sql -f config.yml -s ./other-sql`,
 	RunE: run,
 }
 
@@ -34,19 +50,56 @@ func Execute() {
 }
 
 func init() {
-	rootCmd.Flags().StringVarP(&container, "container", "c", "", "DockerコンテナIDまたはコンテナ名 (必須)")
-	rootCmd.Flags().StringVarP(&dbName, "database", "d", "", "データベース名 (必須)")
-	rootCmd.Flags().StringVarP(&dbUser, "user", "u", "", "データベースユーザー名 (必須)")
+	rootCmd.Flags().StringVarP(&configFile, "file", "f", "", "設定ファイルパス (YAML)")
+	rootCmd.Flags().StringVarP(&container, "container", "c", "", "DockerコンテナIDまたはコンテナ名")
+	rootCmd.Flags().StringVarP(&dbName, "database", "d", "", "データベース名")
+	rootCmd.Flags().StringVarP(&dbUser, "user", "u", "", "データベースユーザー名")
 	rootCmd.Flags().StringVarP(&dbPass, "password", "p", "", "データベースパスワード")
-	rootCmd.Flags().StringVarP(&sqlDir, "sql-dir", "s", "", "SQLファイルが格納されたローカルフォルダパス (必須)")
-
-	rootCmd.MarkFlagRequired("container")
-	rootCmd.MarkFlagRequired("database")
-	rootCmd.MarkFlagRequired("user")
-	rootCmd.MarkFlagRequired("sql-dir")
+	rootCmd.Flags().StringVarP(&sqlDir, "sql-dir", "s", "", "SQLファイルが格納されたローカルフォルダパス")
 }
 
 func run(cmd *cobra.Command, args []string) error {
+	// 設定ファイルを読み込み、未指定のフラグを補完
+	if configFile != "" {
+		cfg, err := loadConfig(configFile)
+		if err != nil {
+			return err
+		}
+		if !cmd.Flags().Changed("container") && cfg.Container != "" {
+			container = cfg.Container
+		}
+		if !cmd.Flags().Changed("database") && cfg.Database != "" {
+			dbName = cfg.Database
+		}
+		if !cmd.Flags().Changed("user") && cfg.User != "" {
+			dbUser = cfg.User
+		}
+		if !cmd.Flags().Changed("password") && cfg.Password != "" {
+			dbPass = cfg.Password
+		}
+		if !cmd.Flags().Changed("sql-dir") && cfg.SQLDir != "" {
+			sqlDir = cfg.SQLDir
+		}
+	}
+
+	// 必須項目チェック
+	var missing []string
+	if container == "" {
+		missing = append(missing, "--container (-c)")
+	}
+	if dbName == "" {
+		missing = append(missing, "--database (-d)")
+	}
+	if dbUser == "" {
+		missing = append(missing, "--user (-u)")
+	}
+	if sqlDir == "" {
+		missing = append(missing, "--sql-dir (-s)")
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("以下の必須項目が不足しています:\n  %s", strings.Join(missing, "\n  "))
+	}
+
 	// SQLフォルダの存在確認
 	if _, err := os.Stat(sqlDir); os.IsNotExist(err) {
 		return fmt.Errorf("SQLフォルダが見つかりません: %s", sqlDir)
@@ -101,6 +154,18 @@ func run(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+func loadConfig(path string) (*config, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("設定ファイルの読み込みに失敗しました: %w", err)
+	}
+	var cfg config
+	if err := yaml.Unmarshal(b, &cfg); err != nil {
+		return nil, fmt.Errorf("設定ファイルのパースに失敗しました: %w", err)
+	}
+	return &cfg, nil
+}
+
 func checkContainer(name string) error {
 	out, err := exec.Command("docker", "inspect", "--format", "{{.State.Running}}", name).Output()
 	if err != nil {
@@ -129,19 +194,16 @@ func findSQLFiles(dir string) ([]string, error) {
 }
 
 func execSQL(sqlFile, filename string) error {
-	// ローカルファイルをコンテナの /tmp へコピー
 	dest := container + ":/tmp/" + filename
 	if err := exec.Command("docker", "cp", sqlFile, dest).Run(); err != nil {
 		return fmt.Errorf("docker cp 失敗: %w", err)
 	}
 
-	// mysqlコマンドを組み立て
 	mysqlCmd := fmt.Sprintf("mysql -u%s %s %s < /tmp/%s; rm /tmp/%s",
 		dbUser, passwordFlag(), dbName, filename, filename)
 
 	out, err := exec.Command("docker", "exec", container, "bash", "-c", mysqlCmd).CombinedOutput()
 	if len(out) > 0 {
-		// Warning行を除いた出力のみ表示
 		printFilteredOutput(out)
 	}
 	if err != nil {
@@ -159,7 +221,6 @@ func passwordFlag() string {
 
 func printFilteredOutput(out []byte) {
 	for _, line := range strings.Split(string(out), "\n") {
-		// mysqlのパスワード警告は表示しない
 		if strings.Contains(line, "Using a password on the command line interface can be insecure") {
 			continue
 		}
