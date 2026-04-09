@@ -98,6 +98,34 @@ chmod +x exec-sql.sh
 
 ---
 
+## 検証用MySQL環境（docker-compose）
+
+`docker-compose.yml` で検証用のMySQLコンテナを手軽に起動できます。
+
+| 項目 | 値 |
+|------|----|
+| コンテナ名 | `test-mysql` |
+| データベース | `testdb` |
+| ユーザー | `root` |
+| パスワード | `secret` |
+| ポート | `3306` |
+
+```bash
+# 起動
+docker compose up -d
+
+# 停止・削除
+docker compose down
+```
+
+起動後、以下のコマンドで動作確認できます。
+
+```bash
+go run . -c test-mysql -d testdb -u root -p secret -s ./sql
+```
+
+---
+
 ## SQLファイルの配置例
 
 ```
